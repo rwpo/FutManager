@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HTML Football Manager</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #1a1a1a; color: #fff; margin: 0; padding: 20px; }
+        h1, h2, h3 { color: #4CAF50; }
+        .container { display: flex; gap: 20px; }
+        .main-panel { flex: 3; background: #2a2a2a; padding: 20px; border-radius: 8px; }
+        .side-panel { flex: 1; background: #222; padding: 15px; border-radius: 8px; height: fit-content; }
+        button { background-color: #4CAF50; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; margin: 5px 0; font-weight: bold; }
+        button:hover { background-color: #45a049; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #444; padding: 8px; text-align: left; font-size: 14px; }
+        th { background-color: #333; }
+        tr:nth-child(even) { background-color: #262626; }
+        .tab-btn { background: #333; border: none; padding: 10px; color: white; cursor: pointer; }
+        .tab-btn.active { background: #4CAF50; }
+        .hidden { display: none; }
+        .log-box { background: #000; padding: 10px; height: 150px; overflow-y: scroll; border: 1px solid #444; font-family: monospace; }
+        .badge { background: #555; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    </style>
+</head>
+<body>
+
+<h1>Football Manager HTML</h1>
+<div id="game-status">
+    <p>Ano: <span id="year-display">2026</span> | Seu Clube: <strong id="user-club-display">Nenhum (Desempregado)</strong></p>
+</div>
+
+<div>
+    <button class="tab-btn active" onclick="showTab('tab-dashboard')">Painel Inicial</button>
+    <button class="tab-btn" onclick="showTab('tab-squad')">Meu Elenco</button>
+    <button class="tab-btn" onclick="showTab('tab-league')">Liga Nacional</button>
+    <button class="tab-btn" onclick="showTab('tab-cup')">Copa do País</button>
+    <button class="tab-btn" onclick="showTab('tab-market')">Mercado / Livres</button>
+    <button class="tab-btn" onclick="showTab('tab-job')">Ofertas de Emprego</button>
+</div>
+
+<div class="container" style="margin-top: 15px;">
+    <div class="main-panel">
+        
+        <!-- DASHBOARD -->
+        <div id="tab-dashboard" class="tab-content">
+            <h2>Painel do Treinador</h2>
+            <p>Avance o tempo para simular a próxima semana de jogos.</p>
+            <button id="btn-next-week" onclick="advanceWeek()">Avançar Semana</button>
+            <button onclick="endSeason()">Encerrar Temporada (Forçar)</button>
+            <h3>Feed de Eventos</h3>
+            <div id="logs" class="log-box"></div>
+        </div>
+
+        <!-- MEU ELENCO -->
+        <div id="tab-squad" class="tab-content hidden">
+            <h2>Elenco Atual</h2>
+            <table>
+                <thead>
+                    <tr><th>Nome</th><th>Idade</th><th>Força (1-100)</th><th>Posição</th></tr>
+                </thead>
+                <tbody id="squad-list"></tbody>
+            </table>
+        </div>
+
+        <!-- LIGA -->
+        <div id="tab-league" class="tab-content hidden">
+            <h2>Campeonato Nacional</h2>
+            <label>Divisão: </label>
+            <select id="div-select" onchange="renderLeagueTable()">
+                <option value="0">Série A (Divisão 1)</option>
+                <option value="1">Série B (Divisão 2)</option>
+                <option value="2">Série C (Divisão 3)</option>
+                <option value="3">Série D (Divisão 4)</option>
+            </select>
+            <table>
+                <thead>
+                    <tr><th>Pos</th><th>Time</th><th>P</th><th>J</th><th>V</th><th>E</th><th>D</th><th>GP</th><th>GC</th></tr>
+                </thead>
+                <tbody id="league-table"></tbody>
+            </table>
+        </div>
+
+        <!-- COPA -->
+        <div id="tab-cup" class="tab-content hidden">
+            <h2>Copa Mata-Mata (Ida e Volta)</h2>
+            <p>Status: <span id="cup-status">Em andamento</span></p>
+            <div id="cup-fixtures"></div>
+        </div>
+
+        <!-- MERCADO -->
+        <div id="tab-market" class="tab-content hidden">
+            <h2>Mercado de Transferências</h2>
+            <h3>Jogadores Sem Contrato (Livres)</h3>
+            <table>
+                <thead>
+                    <tr><th>Nome</th><th>Idade</th><th>Força</th><th>Ação</th></tr>
+                </thead>
+                <tbody id="free-agents-list"></tbody>
+            </table>
+
+            <h3>Negociar com Outros Times</h3>
+            <select id="transfer-team-select" onchange="renderOtherTeamPlayers()"></select>
+            <table>
+                <thead>
+                    <tr><th>Nome</th><th>Idade</th><th>Força</th><th>Ação</th></tr>
+                </thead>
+                <tbody id="other-team-players"></tbody>
+            </table>
+        </div>
+
+        <!-- EMPREGO -->
+        <div id="tab-job" class="tab-content hidden">
+            <h2>Central de Empregos</h2>
+            <p>Se estiver desempregado (ou quiser mudar de time), aceite uma das propostas abaixo:</p>
+            <div id="job-offers"></div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+// --- CONFIGURAÇÃO E DADOS GERAIS ---
+const FIRST_NAMES = ["Lucas", "Gabriel", "Matheus", "Pedro", "Carlos", "João", "Enzo", "Thiago", "Bruno", "Felipe", "Rodrigo", "Diego", "Neymar", "Vinicius", "Alisson"];
+const LAST_NAMES = ["Silva", "Santos", "Oliveira", "Souza", "Rodrigues", "Ferreira", "Alves", "Pereira", "Lima", "Gomes", "Costa", "Ribeiro", "Martins", "Carvalho"];
+
+let year = 2026;
+let currentWeek = 1;
+let teams = []; // 80 times
+let freeAgents = [];
+let userTeamId = null; // null = Desempregado
+let jobOffers = [];
+
+// --- INICIALIZAÇÃO DO JOGO ---
+function initGame() {
+    teams = [];
+    let divNames = ["Série A", "Série B", "Série C", "Série D"];
+    
+    // Criar 80 Times (20 por divisão)
+    let teamCounter = 1;
+    for (let d = 0; d < 4; d++) {
+        for (let t = 0; t < 20; t++) {
+            let team = {
+                id: teamCounter,
+                name: `Clube ${teamCounter} (${divNames[d]})`,
+                division: d,
+                pts: 0, j: 0, v: 0, e: 0, d: 0, gp: 0, gc: 0,
+                squad: []
+            };
+            
+            // Força média base por divisão (Div 0 é mais forte, Div 3 é mais fraca)
+            let basePower = 80 - (d * 15);
+            
+            // Criar 15 jogadores por time
+            for (let j = 0; j < 15; j++) {
+                team.squad.push(generatePlayer(basePower));
+            }
+            teams.push(team);
+            teamCounter++;
+        }
+    }
+
+    // Criar 30 Jogadores Sem Contrato (Livres)
+    for (let i = 0; i < 30; i++) {
+        freeAgents.push(generatePlayer(50));
+    }
+
+    generateJobOffers();
+    log("Jogo iniciado! Você está desempregado. Escolha um time na aba 'Ofertas de Emprego'.");
+    updateUI();
+}
+
+function generatePlayer(basePower = 50) {
+    let age = Math.floor(Math.random() * (34 - 18 + 1)) + 18; // 18 a 34
+    // Força varia em torno da base da divisão
+    let skill = Math.min(100, Math.max(1, Math.floor(basePower + (Math.random() * 20 - 10))));
+    let name = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)] + " " + 
+               LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
+    return { name, age, skill };
+}
+
+function generateJobOffers() {
+    jobOffers = [];
+    // Oferecer 4 times aleatórios
+    let shuffled = [...teams].sort(() => 0.5 - Math.random());
+    jobOffers = shuffled.slice(0, 4);
+}
+
+// --- LÓGICA DE SIMULAÇÃO DE PARTIDAS ---
+function advanceWeek() {
+    if (currentWeek > 38) {
+        log("A temporada terminou! Clique em 'Encerrar Temporada' para virar o ano.");
+        return;
+    }
+
+    log(`--- Semana ${currentWeek} ---`);
+
+    // Simular jogos da Liga da Rodada
+    teams.forEach(t => {
+        // Encontrar um oponente aleatório para simular rodada simples
+        let opponent = teams.find(other => other.division === t.division && other.id !== t.id);
+        if (opponent && t.id < opponent.id) { // Para não repetir o mesmo jogo na semana
+            playMatch(t, opponent);
+        }
+    });
+
+    currentWeek++;
+    updateUI();
+}
+
+function playMatch(home, away) {
+    let homePower = getTeamPower(home) + 5; // Vantagem em casa
+    let awayPower = getTeamPower(away);
+
+    // Calcular gols com base na força
+    let homeGoals = Math.max(0, Math.floor((homePower / 20) + (Math.random() * 3 - 1.5)));
+    let awayGoals = Math.max(0, Math.floor((awayPower / 20) + (Math.random() * 3 - 1.5)));
+
+    // Atualizar tabela
+    home.j++; away.j++;
+    home.gp += homeGoals; home.gc += awayGoals;
+    away.gp += awayGoals; away.gc += homeGoals;
+
+    if (homeGoals > awayGoals) {
+        home.pts += 3; home.v++; away.d++;
+        evolveSquad(home, true); evolveSquad(away, false);
+    } else if (awayGoals > homeGoals) {
+        away.pts += 3; away.v++; home.d++;
+        evolveSquad(away, true); evolveSquad(home, false);
+    } else {
+        home.pts += 1; away.pts += 1;
+        home.e++; away.e++;
+    }
+
+    if (home.id === userTeamId || away.id === userTeamId) {
+        log(`<strong>SEU JOGO:</strong> ${home.name} ${homeGoals} x ${awayGoals} ${away.name}`);
+    }
+}
+
+function getTeamPower(team) {
+    if (team.squad.length === 0) return 1;
+    let sum = team.squad.reduce((acc, p) => acc + p.skill, 0);
+    return Math.round(sum / team.squad.length);
+}
+
+// Evolução de jogadores conforme vitórias
+function evolveSquad(team, isWin) {
+    team.squad.forEach(p => {
+        if (isWin && Math.random() < 0.3) { // 30% de chance de evoluir em vitória
+            if (p.skill < 100) p.skill++;
+        }
+    });
+}
+
+// Encerrar temporada (Envelhecimento e Aposentadoria)
+function endSeason() {
+    year++;
+    currentWeek = 1;
+    log(`=== FIM DA TEMPORADA. BEM-VINDO A ${year}! ===`);
+
+    teams.forEach(t => {
+        // Reset estatísticas da liga
+        t.pts = 0; t.j = 0; t.v = 0; t.e = 0; t.d = 0; t.gp = 0; t.gc = 0;
+
+        // Processar Idade, Involução e Aposentadoria
+        for (let i = t.squad.length - 1; i >= 0; i--) {
+            let p = t.squad[i];
+            p.age++;
+
+            // Involução por idade
+            if (p.age > 28) {
+                let drop = Math.floor(Math.random() * 3) + 1; // Perde de 1 a 3 pts
+                p.skill = Math.max(1, p.skill - drop);
+            }
+
+            // Aposentadoria aos 35 anos
+            if (p.age >= 35) {
+                if (t.id === userTeamId) log(`Seu jogador ${p.name} se aposentou com 35 anos!`);
+                t.squad.splice(i, 1);
+                // Repor com novo jovem de 18 anos
+                t.squad.push(generatePlayer(getTeamPower(t)));
+            }
+        }
+    });
+
+    // Atualizar agentes livres
+    freeAgents.forEach(p => p.age++);
+    freeAgents = freeAgents.filter(p => p.age < 35);
+    while (freeAgents.length < 20) {
+        freeAgents.push(generatePlayer(50));
+    }
+
+    generateJobOffers();
+    updateUI();
+}
+
+// --- INTERAÇÕES DO JOGADOR ---
+function acceptJob(teamId) {
+    userTeamId = teamId;
+    let team = teams.find(t => t.id === teamId);
+    log(`Você assumiu o comando do <strong>${team.name}</strong>!`);
+    updateUI();
+}
+
+function signFreeAgent(index) {
+    if (!userTeamId) return alert("Você precisa estar em um time para contratar!");
+    let myTeam = teams.find(t => t.id === userTeamId);
+    let player = freeAgents.splice(index, 1)[0];
+    myTeam.squad.push(player);
+    log(`Você contratou ${player.name} de graça!`);
+    updateUI();
+}
+
+function buyPlayer(teamId, playerIndex) {
+    if (!userTeamId) return alert("Você precisa estar em um time para contratar!");
+    if (teamId === userTeamId) return;
+
+    let seller = teams.find(t => t.id === teamId);
+    let buyer = teams.find(t => t.id === userTeamId);
+    let player = seller.squad.splice(playerIndex, 1)[0];
+    
+    buyer.squad.push(player);
+    log(`Você comprou ${player.name} do ${seller.name}!`);
+    updateUI();
+}
+
+// --- INTERFACE (UI) ---
+function updateUI() {
+    document.getElementById('year-display').innerText = year;
+    let myTeam = teams.find(t => t.id === userTeamId);
+    document.getElementById('user-club-display').innerText = myTeam ? myTeam.name : "Nenhum (Desempregado)";
+
+    renderSquad();
+    renderLeagueTable();
+    renderFreeAgents();
+    renderJobOffers();
+    populateTransferSelect();
+}
+
+function log(msg) {
+    let logBox = document.getElementById('logs');
+    logBox.innerHTML += `<p style="margin:2px 0;">> ${msg}</p>`;
+    logBox.scrollTop = logBox.scrollHeight;
+}
+
+function showTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.remove('hidden');
+    event.target.classList.add('active');
+}
+
+function renderSquad() {
+    let tbody = document.getElementById('squad-list');
+    tbody.innerHTML = '';
+    if (!userTeamId) {
+        tbody.innerHTML = '<tr><td colspan="3">Você está desempregado.</td></tr>';
+        return;
+    }
+    let myTeam = teams.find(t => t.id === userTeamId);
+    myTeam.squad.sort((a,b) => b.skill - a.skill).forEach(p => {
+        tbody.innerHTML += `<tr><td>${p.name}</td><td>${p.age}</td><td><strong>${p.skill}</strong></td></tr>`;
+    });
+}
+
+function renderLeagueTable() {
+    let div = parseInt(document.getElementById('div-select').value);
+    let tbody = document.getElementById('league-table');
+    tbody.innerHTML = '';
+
+    let divTeams = teams.filter(t => t.division === div);
+    // Ordenar por Pontos, Vitórias e Saldo de Gols
+    divTeams.sort((a,b) => b.pts - a.pts || b.v - a.v || (b.gp-b.gc) - (a.gp-a.gc));
+
+    divTeams.forEach((t, index) => {
+        let isUser = t.id === userTeamId ? 'style="font-weight:bold; color:#4CAF50;"' : '';
+        tbody.innerHTML += `<tr ${isUser}>
+            <td>${index + 1}</td>
+            <td>${t.name}</td>
+            <td>${t.pts}</td>
+            <td>${t.j}</td>
+            <td>${t.v}</td>
+            <td>${t.e}</td>
+            <td>${t.d}</td>
+            <td>${t.gp}</td>
+            <td>${t.gc}</td>
+        </tr>`;
+    });
+}
+
+function renderFreeAgents() {
+    let tbody = document.getElementById('free-agents-list');
+    tbody.innerHTML = '';
+    freeAgents.forEach((p, index) => {
+        tbody.innerHTML += `<tr>
+            <td>${p.name}</td><td>${p.age}</td><td>${p.skill}</td>
+            <td><button onclick="signFreeAgent(${index})">Contratar</button></td>
+        </tr>`;
+    });
+}
+
+function renderJobOffers() {
+    let container = document.getElementById('job-offers');
+    container.innerHTML = '';
+    jobOffers.forEach(t => {
+        container.innerHTML += `<div style="background:#333; padding:10px; margin:5px; border-radius:4px;">
+            <strong>${t.name}</strong> - Divisão ${t.division + 1} (Força Média: ${getTeamPower(t)})
+            <button onclick="acceptJob(${t.id})">Aceitar Proposta</button>
+        </div>`;
+    });
+}
+
+function populateTransferSelect() {
+    let select = document.getElementById('transfer-team-select');
+    select.innerHTML = '<option value="">Selecione um time...</option>';
+    teams.filter(t => t.id !== userTeamId).forEach(t => {
+        select.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+    });
+}
+
+function renderOtherTeamPlayers() {
+    let teamId = parseInt(document.getElementById('transfer-team-select').value);
+    let tbody = document.getElementById('other-team-players');
+    tbody.innerHTML = '';
+    if (!teamId) return;
+
+    let targetTeam = teams.find(t => t.id === teamId);
+    targetTeam.squad.forEach((p, index) => {
+        tbody.innerHTML += `<tr>
+            <td>${p.name}</td><td>${p.age}</td><td>${p.skill}</td>
+            <td><button onclick="buyPlayer(${teamId}, ${index})">Comprar</button></td>
+        </tr>`;
+    });
+}
+
+// Iniciar o jogo ao carregar a página
+window.onload = initGame;
+</script>
+</body>
+</html>
