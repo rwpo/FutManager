@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>World Football Manager Pro</title>
+    <style>
+        body { font-family: Arial, sans-serif; background-color: #121212; color: #e0e0e0; margin: 0; padding: 20px; }
+        h1, h2, h3 { color: #4CAF50; margin-top: 5px; }
+        .container { display: flex; gap: 20px; }
+        .main-panel { flex: 3; background: #1e1e1e; padding: 20px; border-radius: 8px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); }
+        button { background-color: #4CAF50; color: white; border: none; padding: 10px 15px; cursor: pointer; border-radius: 4px; font-weight: bold; margin: 2px; }
+        button:hover { background-color: #45a049; }
+        button:disabled { background-color: #555; cursor: not-allowed; }
+        select { padding: 8px; background: #2a2a2a; color: white; border: 1px solid #444; border-radius: 4px; }
+        table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+        th, td { border: 1px solid #333; padding: 8px; text-align: left; font-size: 14px; }
+        th { background-color: #2a2a2a; }
+        tr:nth-child(even) { background-color: #242424; }
+        tr.promoted { background-color: rgba(76, 175, 80, 0.15); }
+        tr.relegated { background-color: rgba(244, 67, 54, 0.15); }
+        .tab-btn { background: #2a2a2a; border: none; padding: 10px 15px; color: white; cursor: pointer; border-radius: 4px 4px 0 0; }
+        .tab-btn.active { background: #4CAF50; }
+        .hidden { display: none; }
+        .log-box { background: #000; padding: 10px; height: 180px; overflow-y: scroll; border: 1px solid #333; font-family: monospace; border-radius: 4px; }
+        .user-highlight { color: #4CAF50; font-weight: bold; }
+        .match-card { background: #282828; padding: 10px; margin: 5px 0; border-radius: 4px; border-left: 4px solid #4CAF50; }
+        .cup-bracket { background: #252525; padding: 10px; border-radius: 4px; margin-bottom: 10px; border-left: 3px solid #2196F3; }
+        .pos-badge { font-weight: bold; padding: 2px 6px; border-radius: 3px; font-size: 11px; }
+        .pos-GOL { background: #ff9800; color: #000; }
+        .pos-DEF { background: #2196F3; color: #fff; }
+        .pos-MEI { background: #4CAF50; color: #fff; }
+        .pos-ATA { background: #f44336; color: #fff; }
+        .money { color: #85bb65; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+<h1>World Football Manager Pro</h1>
+<div id="game-status" style="background: #252525; padding: 10px; border-radius: 4px; margin-bottom: 15px;">
+    <strong>Ano:</strong> <span id="year-display">2026</span> | 
+    <strong>Semana:</strong> <span id="week-display">1</span>/38 | 
+    <strong>Seu Clube:</strong> <span id="user-club-display" class="user-highlight">Nenhum</span> | 
+    <strong>Saldo:</strong> <span id="user-money-display" class="money">R$ 0</span>
+</div>
+
+<div>
+    <button class="tab-btn active" onclick="showTab('tab-dashboard')">Painel do Treinador</button>
+    <button class="tab-btn" onclick="showTab('tab-tactic')">Escalação / Tática</button>
+    <button class="tab-btn" onclick="showTab('tab-squad')">Meu Elenco (Máx 25)</button>
+    <button class="tab-btn" onclick="showTab('tab-league')">Liga Nacional</button>
+    <button class="tab-btn" onclick="showTab('tab-cup')">Copa do País</button>
+    <button class="tab-btn" onclick="showTab('tab-market')">Mercado</button>
+    <button class="tab-btn" onclick="showTab('tab-job')">Central de Empregos</button>
+</div>
+
+<div class="container" style="margin-top: 10px;">
+    <div class="main-panel">
+        
+        <!-- DASHBOARD -->
+        <div id="tab-dashboard" class="tab-content">
+            <h2>Próxima Rodada</h2>
+            <button id="btn-next-week" onclick="advanceWeek()" style="font-size: 16px; padding: 12px 20px;">Simular Próxima Rodada</button>
+            <button onclick="endSeason()" style="background-color: #d32f2f;">Encerrar Temporada (Virada de Ano)</button>
+            
+            <h3>Resultados do Seu Time</h3>
+            <div id="user-match-result"><em>Nenhum jogo disputado ainda nesta semana.</em></div>
+
+            <h3>Feed de Eventos</h3>
+            <div id="logs" class="log-box"></div>
+        </div>
+
+        <!-- ESCALAÇÃO / TÁTICA -->
+        <div id="tab-tactic" class="tab-content hidden">
+            <h2>Escalação Titular (11 Jogadores)</h2>
+            <div style="margin-bottom: 15px;">
+                <label><strong>Formação Tática: </strong></label>
+                <select id="formation-select" onchange="changeFormation()">
+                    <option value="4-4-2">4-4-2 (1 GOL | 4 DEF | 4 MEI | 2 ATA)</option>
+                    <option value="4-3-3">4-3-3 (1 GOL | 4 DEF | 3 MEI | 3 ATA)</option>
+                    <option value="3-5-2">3-5-2 (1 GOL | 3 DEF | 5 MEI | 2 ATA)</option>
+                    <option value="5-3-2">5-3-2 (1 GOL | 5 DEF | 3 MEI | 2 ATA)</option>
+                </select>
+                <button onclick="autoScaleUserTeam()">Escalação Automática (Melhores por Posição)</button>
+            </div>
+            <p>Selecione exatamente 11 titulares. (<span id="starter-count">0</span>/11 Selecionados)</p>
+            <table>
+                <thead>
+                    <tr><th>Escalar</th><th>Nome</th><th>Posição</th><th>Idade</th><th>Força</th><th>Salário Mensal</th></tr>
+                </thead>
+                <tbody id="tactic-squad-list"></tbody>
+            </table>
+        </div>
+
+        <!-- MEU ELENCO -->
+        <div id="tab-squad" class="tab-content hidden">
+            <h2>Elenco Atual (<span id="squad-count">0</span>/25 Jogadores)</h2>
+            <p><strong>Folha Salarial Mensal Total:</strong> <span id="payroll-display" class="money">R$ 0</span> (Cobrado a cada 4 semanas)</p>
+            <table>
+                <thead>
+                    <tr><th>Nome</th><th>Posição</th><th>Idade</th><th>Força (1-100)</th><th>Salário</th><th>Status</th></tr>
+                </thead>
+                <tbody id="squad-list"></tbody>
+            </table>
+        </div>
+
+        <!-- LIGA -->
+        <div id="tab-league" class="tab-content hidden">
+            <h2>Campeonato Nacional (Pontos Corridos)</h2>
+            <p><small>Verde: Acesso / Título | Vermelho: Rebaixamento. Obs: Bilheteria por jogo como mandante e prêmios em dinheiro ao fim do torneio.</small></p>
+            <label>Selecione a Divisão: </label>
+            <select id="div-select" onchange="renderLeagueTable()">
+                <option value="0">Primeira Divisão (Série A)</option>
+                <option value="1">Segunda Divisão (Série B)</option>
+                <option value="2">Terceira Divisão (Série C)</option>
+                <option value="3">Quarta Divisão (Série D)</option>
+            </select>
+            <table>
+                <thead>
+                    <tr><th>Pos</th><th>Time</th><th>P</th><th>J</th><th>V</th><th>E</th><th>D</th><th>GP</th><th>GC</th><th>SG</th></tr>
+                </thead>
+                <tbody id="league-table"></tbody>
+            </table>
+        </div>
+
+        <!-- COPA -->
+        <div id="tab-cup" class="tab-content hidden">
+            <h2>Copa Mata-Mata Eliminatória</h2>
+            <p><strong>Fase Atual:</strong> <span id="cup-phase-text" class="user-highlight">1ª Fase</span></p>
+            <p><small>Premiação financeira creditada por vitória a cada fase avançada!</small></p>
+            <div id="cup-fixtures"></div>
+        </div>
+
+        <!-- MERCADO -->
+        <div id="tab-market" class="tab-content hidden">
+            <h2>Mercado de Transferências</h2>
+            <p><small>Contrate jogadores de outros times negociando diretamente. Limite de elenco: 25 atletas.</small></p>
+            <label>Negociar com Outros Times: </label>
+            <select id="transfer-team-select" onchange="renderOtherTeamPlayers()"></select>
+            <table>
+                <thead>
+                    <tr><th>Nome</th><th>Posição</th><th>Idade</th><th>Força</th><th>Preço</th><th>Salário</th><th>Ação</th></tr>
+                </thead>
+                <tbody id="other-team-players"></tbody>
+            </table>
+        </div>
+
+        <!-- EMPREGO -->
+        <div id="tab-job" class="tab-content hidden">
+            <h2>Propostas de Emprego</h2>
+            <p>Escolha um dos clubes abaixo para assumir como treinador:</p>
+            <div id="job-offers"></div>
+        </div>
+
+    </div>
+</div>
+
+<script>
+const REAL_TEAMS = [
+    ["Real Madrid", "Manchester City", "Bayern de Munique", "Barcelona", "PSG", "Liverpool", "Inter de Milão", "Arsenal", "Flamengo", "Palmeiras", "Juventus", "Bayer Leverkusen", "Atletico de Madrid", "Borussia Dortmund", "Chelsea", "Napoli", "AC Milan", "Benfica", "Porto", "River Plate"],
+    ["São Paulo", "Fluminense", "Internacional", "Grêmio", "Atlético Mineiro", "Botafogo", "Corinthians", "Cruzeiro", "Vasco", "Boca Juniors", "Ajax", "Sporting", "Roma", "Lazio", "Sevilla", "Villarreal", "Fiorentina", "Atalanta", "RB Leipzig", "Tottenham"],
+    ["Athletico-PR", "Bahia", "Fortaleza", "Red Bull Bragantino", "Santos", "Ceará", "Goiás", "Coritiba", "Sport", "Vitória", "Peñarol", "Nacional-URU", "LDU", "Independiente", "Racing", "Everton", "West Ham", "Real Betis", "Lyon", "Marseille"],
+    ["Juventude", "Criciúma", "Atlético-GO", "Cuiabá", "Avaí", "Chapecoense", "Guarani", "Ponte Preta", "Vila Nova", "CRB", "Sampaio Corrêa", "Paysandu", "Remo", "América-MG", "Operário-PR", "Botafogo-SP", "Ituano", "Mirassol", "Novorizontino", "Brusque"]
+];
+
+const FIRST_NAMES = ["Lucas", "Gabriel", "Matheus", "Pedro", "Carlos", "João", "Enzo", "Thiago", "Bruno", "Felipe", "Rodrigo", "Diego", "Neymar", "Vinicius", "Alisson", "Lionel", "Cristiano", "Kylian", "Luka", "Erling"];
+const LAST_NAMES = ["Silva", "Santos", "Oliveira", "Souza", "Rodrigues", "Ferreira", "Alves", "Pereira", "Lima", "Gomes", "Modric", "Mbappe", "Haaland", "Messias", "Ronaldo", "De Bruyne", "Kane", "Bellingham"];
+
+const FORMATIONS = {
+    '4-4-2': { GOL: 1, DEF: 4, MEI: 4, ATA: 2 },
+    '4-3-3': { GOL: 1, DEF: 4, MEI: 3, ATA: 3 },
+    '3-5-2': { GOL: 1, DEF: 3, MEI: 5, ATA: 2 },
+    '5-3-2': { GOL: 1, DEF: 5, MEI: 3, ATA: 2 }
+};
+
+let year = 2026;
+let currentWeek = 1;
+let teams = [];
+let userTeamId = null;
+let jobOffers = [];
+let leagueSchedules = {};
+
+let cupRounds = []; 
+let currentCupPhase = 0; 
+const CUP_PHASE_NAMES = ["1ª Fase (64 clubes)", "2ª Fase (32 clubes)", "Oitavas de Final", "Quartas de Final", "Semifinal", "GRANDE FINAL"];
+const CUP_WEEKS = [4, 10, 16, 22, 28, 34]; 
+const CUP_PRIZES = [200000, 400000, 800000, 1500000, 3000000, 6000000];
+
+function initGame() {
+    teams = [];
+    let teamCounter = 1;
+
+    for (let d = 0; d < 4; d++) {
+        let basePower = 85 - (d * 12);
+        let baseMoney = (4 - d) * 10000000; 
+
+        for (let t = 0; t < 20; t++) {
+            let team = {
+                id: teamCounter,
+                name: REAL_TEAMS[d][t],
+                division: d,
+                money: baseMoney,
+                formation: '4-4-2',
+                pts: 0, j: 0, v: 0, e: 0, d: 0, gp: 0, gc: 0,
+                squad: []
+            };
+            
+            let positionsConfig = [
+                { pos: 'GOL', count: 3 },
+                { pos: 'DEF', count: 7 },
+                { pos: 'MEI', count: 8 },
+                { pos: 'ATA', count: 5 }
+            ];
+
+            let pId = 1;
+            positionsConfig.forEach(cfg => {
+                for (let i = 0; i < cfg.count; i++) {
+                    let player = generatePlayer(basePower, cfg.pos);
+                    player.id = pId++;
+                    team.squad.push(player);
+                }
+            });
+
+            autoPickStartersByFormation(team);
+            teams.push(team);
+            teamCounter++;
+        }
+    }
+
+    generateLeagueSchedules();
+    initCup();
+    generateJobOffers();
+    log("Bem-vindo! Selecione um clube na Central de Empregos para iniciar sua carreira.");
+    updateUI();
+}
+
+function generatePlayer(basePower = 50, position = 'MEI') {
+    let age = Math.floor(Math.random() * (33 - 18 + 1)) + 18;
+    let skill = Math.min(100, Math.max(1, Math.floor(basePower + (Math.random() * 20 - 10))));
+    let name = FIRST_NAMES[Math.floor(Math.random() * FIRST_NAMES.length)] + " " + 
+               LAST_NAMES[Math.floor(Math.random() * LAST_NAMES.length)];
+    let salary = skill * 1500;
+    return { name, age, skill, position, salary, isStarter: false };
+}
+
+function autoPickStartersByFormation(team) {
+    team.squad.forEach(p => p.isStarter = false);
+    let formNeeded = FORMATIONS[team.formation || '4-4-2'];
+
+    ['GOL', 'DEF', 'MEI', 'ATA'].forEach(pos => {
+        let needed = formNeeded[pos];
+        let available = team.squad.filter(p => p.position === pos).sort((a,b) => b.skill - a.skill);
+        for (let i = 0; i < needed && i < available.length; i++) {
+            available[i].isStarter = true;
+        }
+    });
+
+    let currentStarters = team.squad.filter(p => p.isStarter).length;
+    if (currentStarters < 11) {
+        let remaining = team.squad.filter(p => !p.isStarter).sort((a,b) => b.skill - a.skill);
+        for (let i = 0; i < (11 - currentStarters) && i < remaining.length; i++) {
+            remaining[i].isStarter = true;
+        }
+    }
+}
+
+function generateLeagueSchedules() {
+    leagueSchedules = {};
+    for (let d = 0; d < 4; d++) {
+        let divTeams = teams.filter(t => t.division === d).map(t => t.id);
+        leagueSchedules[d] = createRoundRobinSchedule(divTeams);
+    }
+}
+
+function createRoundRobinSchedule(teamIds) {
+    let rounds = [];
+    let n = teamIds.length;
+    let pool = [...teamIds];
+
+    for (let r = 0; r < n - 1; r++) {
+        let roundMatches = [];
+        for (let i = 0; i < n / 2; i++) {
+            roundMatches.push({ home: pool[i], away: pool[n - 1 - i] });
+        }
+        rounds.push(roundMatches);
+        pool.splice(1, 0, pool.pop());
+    }
+
+    let returnRounds = rounds.map(round => 
+        round.map(m => ({ home: m.away, away: m.home }))
+    );
+
+    return [...rounds, ...returnRounds];
+}
+
+function initCup() {
+    cupRounds = [];
+    currentCupPhase = 0;
+    let qualified = [...teams].sort(() => 0.5 - Math.random()).slice(0, 64);
+    
+    let firstRoundMatches = [];
+    for (let i = 0; i < qualified.length; i += 2) {
+        firstRoundMatches.push({
+            homeId: qualified[i].id,
+            awayId: qualified[i+1].id,
+            scoreHome: null, scoreAway: null, winnerId: null
+        });
+    }
+    cupRounds.push({ name: CUP_PHASE_NAMES[0], matches: firstRoundMatches });
+}
+
+function simulateCupWeek() {
+    if (currentCupPhase >= CUP_PHASE_NAMES.length) return;
+
+    let currentRound = cupRounds[currentCupPhase];
+    let prize = CUP_PRIZES[currentCupPhase];
+    log(`<strong>[COPA] Disputa da ${currentRound.name}!</strong> (Premiação p/ classificação: R$ ${prize.toLocaleString('pt-BR')})`);
+
+    let winners = [];
+
+    currentRound.matches.forEach(m => {
+        let t1 = teams.find(t => t.id === m.homeId);
+        let t2 = teams.find(t => t.id === m.awayId);
+
+        let g1 = Math.floor((getTeamPower(t1) / 18) + Math.random() * 2.5);
+        let g2 = Math.floor((getTeamPower(t2) / 18) + Math.random() * 2.5);
+
+        if (g1 === g2) {
+            if (Math.random() > 0.5) g1 += 1;
+            else g2 += 1;
+        }
+
+        m.scoreHome = g1; m.scoreAway = g2;
+        let winner = (g1 > g2) ? t1 : t2;
+        m.winnerId = winner.id;
+        winners.push(winner);
+
+        winner.money += prize;
+
+        if (t1.id === userTeamId || t2.id === userTeamId) {
+            let resText = (winner.id === userTeamId) ? `VOCÊ AVANÇOU! (+R$ ${prize.toLocaleString('pt-BR')})` : "VOCÊ FOI ELIMINADO!";
+            log(`<strong>[SUA COPA]:</strong> ${t1.name} ${g1} x ${g2} ${t2.name} - ${resText}`);
+        }
+    });
+
+    if (winners.length > 1) {
+        currentCupPhase++;
+        let nextRoundMatches = [];
+        for (let i = 0; i < winners.length; i += 2) {
+            nextRoundMatches.push({
+                homeId: winners[i].id, awayId: winners[i+1].id,
+                scoreHome: null, scoreAway: null, winnerId: null
+            });
+        }
+        cupRounds.push({ name: CUP_PHASE_NAMES[currentCupPhase], matches: nextRoundMatches });
+    } else if (winners.length === 1) {
+        log(`🏆 <strong>${winners[0].name} É O CAMPEÃO DA COPA DO PAÍS!</strong> 🏆`);
+    }
+}
+
+function advanceWeek() {
+    if (userTeamId) {
+        let myTeam = teams.find(t => t.id === userTeamId);
+        let starterCount = myTeam.squad.filter(p => p.isStarter).length;
+        if (starterCount !== 11) {
+            alert(`Você deve escalar EXATAMENTE 11 titulares! (Atualmente: ${starterCount})`);
+            showTab('tab-tactic');
+            return;
+        }
+    }
+
+    if (currentWeek > 38) {
+        log("Temporada encerrada! Clique em 'Encerrar Temporada'.");
+        return;
+    }
+
+    // Pagamento de Salários (a cada 4 semanas)
+    if (currentWeek % 4 === 0) {
+        teams.forEach(t => {
+            let totalPayroll = t.squad.reduce((sum, p) => sum + p.salary, 0);
+            t.money -= totalPayroll;
+            if (t.id === userTeamId) {
+                log(`💸 <strong>[FINANÇAS]</strong> Pagamento de salários mensais debitado: R$ ${totalPayroll.toLocaleString('pt-BR')}`);
+            }
+        });
+    }
+
+    document.getElementById('user-match-result').innerHTML = "<em>Nenhum jogo disputado de Liga nesta semana.</em>";
+    log(`--- <strong>Rodada ${currentWeek}</strong> ---`);
+
+    for (let d = 0; d < 4; d++) {
+        let roundIndex = currentWeek - 1;
+        let roundMatches = leagueSchedules[d][roundIndex];
+
+        roundMatches.forEach(m => {
+            let home = teams.find(t => t.id === m.home);
+            let away = teams.find(t => t.id === m.away);
+            playMatch(home, away);
+        });
+    }
+
+    if (CUP_WEEKS.includes(currentWeek)) {
+        simulateCupWeek();
+    }
+
+    currentWeek++;
+    updateUI();
+}
+
+function playMatch(home, away) {
+    if (home.id !== userTeamId) autoPickStartersByFormation(home);
+    if (away.id !== userTeamId) autoPickStartersByFormation(away);
+
+    // Arrecadação de Bilheteria Mandante
+    let gateRevenue = Math.round((getTeamPower(home) * 3500) + (Math.random() * 50000));
+    home.money += gateRevenue;
+
+    let homePower = getTeamPower(home) + 3; 
+    let awayPower = getTeamPower(away);
+
+    let homeGoals = Math.max(0, Math.floor((homePower / 18) + (Math.random() * 3 - 1.5)));
+    let awayGoals = Math.max(0, Math.floor((awayPower / 18) + (Math.random() * 3 - 1.5)));
+
+    home.j++; away.j++;
+    home.gp += homeGoals; home.gc += awayGoals;
+    away.gp += awayGoals; away.gc += homeGoals;
+
+    if (homeGoals > awayGoals) {
+        home.pts += 3; home.v++; away.d++;
+    } else if (awayGoals > homeGoals) {
+        away.pts += 3; away.v++; home.d++;
+    } else {
+        home.pts += 1; away.pts += 1;
+        home.e++; away.e++;
+    }
+
+    if (home.id === userTeamId || away.id === userTeamId) {
+        let isHome = home.id === userTeamId;
+        let revenueText = isHome ? `<br><small class="money">+R$ ${gateRevenue.toLocaleString('pt-BR')} (Bilheteria Mandante)</small>` : '';
+        let text = `<div class="match-card"><strong>LIGA NACIONAL:</strong><br>${home.name} ${homeGoals} x ${awayGoals} ${away.name} ${revenueText}</div>`;
+        document.getElementById('user-match-result').innerHTML = text;
+        log(`SEU JOGO: ${home.name} ${homeGoals} x ${awayGoals} ${away.name}`);
+    }
+}
+
+function getTeamPower(team) {
+    if (!team) return 1;
+    let starters = team.squad.filter(p => p.isStarter);
+    if (starters.length === 0) starters = team.squad.slice(0, 11);
+    let sum = starters.reduce((acc, p) => acc + p.skill, 0);
+    return Math.round(sum / starters.length);
+}
+
+function changeFormation() {
+    if (!userTeamId) return;
+    let myTeam = teams.find(t => t.id === userTeamId);
+    myTeam.formation = document.getElementById('formation-select').value;
+    autoScaleUserTeam();
+}
+
+function autoScaleUserTeam() {
+    if (!userTeamId) return;
+    let myTeam = teams.find(t => t.id === userTeamId);
+    autoPickStartersByFormation(myTeam);
+    updateUI();
+    log("Escalação e tática otimizadas com sucesso!");
+}
+
+function toggleStarter(index) {
+    let myTeam = teams.find(t => t.id === userTeamId);
+    let p = myTeam.squad[index];
+    let currentStarters = myTeam.squad.filter(s => s.isStarter).length;
+
+    if (!p.isStarter && currentStarters >= 11) {
+        alert("Já existem 11 titulares selecionados!");
+        return;
+    }
+
+    p.isStarter = !p.isStarter;
+    updateUI();
+}
+
+function endSeason() {
+    log(`=== <strong>PROCESSANDO FIM DA TEMPORADA DE ${year}</strong> ===`);
+
+    let prizePool = [
+        [15000000, 10000000, 8000000, 6000000, 4000000], 
+        [8000000, 5000000, 3000000, 2000000],             
+        [4000000, 2500000, 1500000],                     
+        [2000000, 1000000]                               
+    ];
+
+    for (let d = 0; d < 4; d++) {
+        let divTeams = teams.filter(t => t.division === d).sort((a,b) => 
+            b.pts - a.pts || b.v - a.v || (b.gp-b.gc) - (a.gp-a.gc) || b.gp - a.gp
+        );
+
+        divTeams.forEach((t, idx) => {
+            let prize = prizePool[d][idx] || 500000;
+            t.money += prize;
+            if (t.id === userTeamId) {
+                log(`🏆 <strong>[PREMIAÇÃO DA LIGA]</strong> Posição ${idx+1}º na Série ${String.fromCharCode(65+d)}: R$ ${prize.toLocaleString('pt-BR')}`);
+            }
+        });
+    }
+
+    let tables = {};
+    for (let d = 0; d < 4; d++) {
+        tables[d] = teams.filter(t => t.division === d).sort((a,b) => b.pts - a.pts);
+    }
+
+    for (let i = 16; i < 20; i++) tables[0][i].division = 1;
+    for (let i = 0; i < 4; i++) tables[1][i].division = 0;
+    for (let i = 16; i < 20; i++) tables[1][i].division = 2;
+    for (let i = 0; i < 4; i++) tables[2][i].division = 1;
+    for (let i = 16; i < 20; i++) tables[2][i].division = 3;
+    for (let i = 0; i < 4; i++) tables[3][i].division = 2;
+
+    teams.forEach(t => {
+        t.pts = 0; t.j = 0; t.v = 0; t.e = 0; t.d = 0; t.gp = 0; t.gc = 0;
+        for (let i = t.squad.length - 1; i >= 0; i--) {
+            let p = t.squad[i];
+            p.age++;
+            if (p.age > 28) p.skill = Math.max(1, p.skill - Math.floor(Math.random() * 3));
+            if (p.age >= 35) {
+                t.squad.splice(i, 1);
+                t.squad.push(generatePlayer(getTeamPower(t), p.position));
+            }
+        }
+        autoPickStartersByFormation(t);
+    });
+
+    year++; currentWeek = 1;
+    generateLeagueSchedules();
+    initCup();
+    generateJobOffers();
+    updateUI();
+}
+
+function generateJobOffers() {
+    let shuffled = [...teams].sort(() => 0.5 - Math.random());
+    jobOffers = shuffled.slice(0, 4);
+}
+
+function acceptJob(teamId) {
+    userTeamId = teamId;
+    let team = teams.find(t => t.id === teamId);
+    document.getElementById('formation-select').value = team.formation || '4-4-2';
+    autoPickStartersByFormation(team);
+    log(`Assumiu o comando do <strong>${team.name}</strong>!`);
+    updateUI();
+}
+
+function buyPlayer(teamId, playerIndex) {
+    if (!userTeamId) return alert("Assuma um clube primeiro!");
+    let seller = teams.find(t => t.id === teamId);
+    let buyer = teams.find(t => t.id === userTeamId);
+
+    if (buyer.squad.length >= 25) {
+        return alert("Seu elenco atingiu o limite de 25 jogadores!");
+    }
+
+    let player = seller.squad[playerIndex];
+    let price = player.skill * 100000;
+
+    if (buyer.money < price) {
+        return alert(`Saldo insuficiente! Preço do jogador: R$ ${price.toLocaleString('pt-BR')}`);
+    }
+
+    buyer.money -= price;
+    seller.money += price;
+
+    seller.squad.splice(playerIndex, 1);
+    player.isStarter = false;
+    buyer.squad.push(player);
+
+    seller.squad.push(generatePlayer(getTeamPower(seller), player.position));
+
+    log(`Comprou ${player.name} (${player.position}) do ${seller.name} por R$ ${price.toLocaleString('pt-BR')}!`);
+    updateUI();
+}
+
+function updateUI() {
+    document.getElementById('year-display').innerText = year;
+    document.getElementById('week-display').innerText = currentWeek;
+
+    let myTeam = teams.find(t => t.id === userTeamId);
+    if (myTeam) {
+        document.getElementById('user-club-display').innerText = `${myTeam.name} (Série ${String.fromCharCode(65 + myTeam.division)})`;
+        document.getElementById('user-money-display').innerText = `R$ ${myTeam.money.toLocaleString('pt-BR')}`;
+    } else {
+        document.getElementById('user-club-display').innerText = "Nenhum";
+        document.getElementById('user-money-display').innerText = "R$ 0";
+    }
+
+    renderSquad();
+    renderTactics();
+    renderLeagueTable();
+    renderCup();
+    renderJobOffers();
+    populateTransferSelect();
+}
+
+function log(msg) {
+    let logBox = document.getElementById('logs');
+    logBox.innerHTML += `<p style="margin:3px 0;">> ${msg}</p>`;
+    logBox.scrollTop = logBox.scrollHeight;
+}
+
+function showTab(tabId) {
+    document.querySelectorAll('.tab-content').forEach(el => el.classList.add('hidden'));
+    document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+    document.getElementById(tabId).classList.remove('hidden');
+    event.target.classList.add('active');
+}
+
+function renderSquad() {
+    let tbody = document.getElementById('squad-list');
+    tbody.innerHTML = '';
+    if (!userTeamId) return;
+
+    let myTeam = teams.find(t => t.id === userTeamId);
+    document.getElementById('squad-count').innerText = myTeam.squad.length;
+
+    let totalPayroll = myTeam.squad.reduce((sum, p) => sum + p.salary, 0);
+    document.getElementById('payroll-display').innerText = `R$ ${totalPayroll.toLocaleString('pt-BR')}`;
+
+    myTeam.squad.sort((a,b) => b.skill - a.skill).forEach(p => {
+        let status = p.isStarter ? '<span class="user-highlight">Titular</span>' : 'Reserva';
+        tbody.innerHTML += `<tr>
+            <td>${p.name}</td>
+            <td><span class="pos-badge pos-${p.position}">${p.position}</span></td>
+            <td>${p.age} anos</td>
+            <td><strong>${p.skill}</strong></td>
+            <td>R$ ${p.salary.toLocaleString('pt-BR')}</td>
+            <td>${status}</td>
+        </tr>`;
+    });
+}
+
+function renderTactics() {
+    let tbody = document.getElementById('tactic-squad-list');
+    tbody.innerHTML = '';
+    if (!userTeamId) return;
+
+    let myTeam = teams.find(t => t.id === userTeamId);
+    let starterCount = myTeam.squad.filter(p => p.isStarter).length;
+    document.getElementById('starter-count').innerText = starterCount;
+
+    myTeam.squad.forEach((p, index) => {
+        let checked = p.isStarter ? 'checked' : '';
+        tbody.innerHTML += `<tr>
+            <td><input type="checkbox" ${checked} onchange="toggleStarter(${index})"></td>
+            <td>${p.name}</td>
+            <td><span class="pos-badge pos-${p.position}">${p.position}</span></td>
+            <td>${p.age} anos</td>
+            <td><strong>${p.skill}</strong></td>
+            <td>R$ ${p.salary.toLocaleString('pt-BR')}</td>
+        </tr>`;
+    });
+}
+
+function renderLeagueTable() {
+    let div = parseInt(document.getElementById('div-select').value);
+    let tbody = document.getElementById('league-table');
+    tbody.innerHTML = '';
+
+    let divTeams = teams.filter(t => t.division === div);
+    divTeams.sort((a,b) => b.pts - a.pts || b.v - a.v || (b.gp-b.gc) - (a.gp-a.gc) || b.gp - a.gp);
+
+    divTeams.forEach((t, index) => {
+        let isUser = t.id === userTeamId ? 'class="user-highlight"' : '';
+        let rowClass = '';
+        if (div === 0 && index === 0) rowClass = 'promoted';
+        else if (div > 0 && index < 4) rowClass = 'promoted';
+        else if (div < 3 && index >= 16) rowClass = 'relegated';
+
+        tbody.innerHTML += `<tr class="${rowClass}">
+            <td>${index + 1}</td>
+            <td ${isUser}>${t.name}</td>
+            <td><strong>${t.pts}</strong></td>
+            <td>${t.j}</td><td>${t.v}</td><td>${t.e}</td><td>${t.d}</td>
+            <td>${t.gp}</td><td>${t.gc}</td><td>${t.gp - t.gc}</td>
+        </tr>`;
+    });
+}
+
+function renderCup() {
+    let container = document.getElementById('cup-fixtures');
+    container.innerHTML = '';
+    document.getElementById('cup-phase-text').innerText = CUP_PHASE_NAMES[currentCupPhase] || "Copa Finalizada";
+
+    cupRounds.forEach((round) => {
+        let html = `<div class="cup-bracket"><h3>${round.name}</h3>`;
+        round.matches.forEach(m => {
+            let t1 = teams.find(t => t.id === m.homeId);
+            let t2 = teams.find(t => t.id === m.awayId);
+            let resultText = (m.scoreHome !== null) ? `<strong>${m.scoreHome} x ${m.scoreAway}</strong>` : "A disputar";
+            let winnerText = m.winnerId ? ` - Avancer: <strong>${teams.find(t=>t.id===m.winnerId).name}</strong>` : "";
+            let highlight = (t1.id === userTeamId || t2.id === userTeamId) ? "style='color:#4CAF50; font-weight:bold;'" : "";
+
+            html += `<div ${highlight} style="padding:4px 0; border-bottom:1px solid #333;">
+                ${t1.name} ${resultText} ${t2.name} ${winnerText}
+            </div>`;
+        });
+        html += `</div>`;
+        container.innerHTML = html + container.innerHTML;
+    });
+}
+
+function renderJobOffers() {
+    let container = document.getElementById('job-offers');
+    container.innerHTML = '';
+    jobOffers.forEach(t => {
+        let divNames = ["Série A", "Série B", "Série C", "Série D"];
+        container.innerHTML += `<div style="background:#2a2a2a; padding:12px; margin:8px 0; border-radius:4px; border-left: 4px solid #4CAF50;">
+            <strong>${t.name}</strong> - ${divNames[t.division]} | Saldo Inicial: <span class="money">R$ ${t.money.toLocaleString('pt-BR')}</span><br>
+            <button onclick="acceptJob(${t.id})" style="margin-top:5px;">Assinar Contrato</button>
+        </div>`;
+    });
+}
+
+function populateTransferSelect() {
+    let select = document.getElementById('transfer-team-select');
+    select.innerHTML = '<option value="">Escolha um clube...</option>';
+    teams.filter(t => t.id !== userTeamId).forEach(t => {
+        select.innerHTML += `<option value="${t.id}">${t.name}</option>`;
+    });
+}
+
+function renderOtherTeamPlayers() {
+    let teamId = parseInt(document.getElementById('transfer-team-select').value);
+    let tbody = document.getElementById('other-team-players');
+    tbody.innerHTML = '';
+    if (!teamId) return;
+
+    let targetTeam = teams.find(t => t.id === teamId);
+    targetTeam.squad.forEach((p, index) => {
+        let price = p.skill * 100000;
+        tbody.innerHTML += `<tr>
+            <td>${p.name}</td>
+            <td><span class="pos-badge pos-${p.position}">${p.position}</span></td>
+            <td>${p.age} anos</td>
+            <td>${p.skill}</td>
+            <td class="money">R$ ${price.toLocaleString('pt-BR')}</td>
+            <td>R$ ${p.salary.toLocaleString('pt-BR')}</td>
+            <td><button onclick="buyPlayer(${teamId}, ${index})">Comprar</button></td>
+        </tr>`;
+    });
+}
+
+window.onload = initGame;
+</script>
+</body>
+</html>
